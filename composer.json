@@ -1,0 +1,20 @@
+{
+    "name": "user/mass-project",
+    "autoload": {
+        "psr-4": {
+            "User\\MassProject\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "jamesq666",
+            "email": "jam_666@mail.ru"
+        }
+    ],
+    "require": {},
+    "config": {
+        "allow-plugins": {
+            "yiisoft/yii2-composer": true
+        }
+    }
+}
