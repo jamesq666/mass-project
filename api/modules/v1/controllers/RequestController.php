@@ -9,6 +9,7 @@ use Throwable;
 use Yii;
 use yii\base\InvalidConfigException;
 use yii\filters\ContentNegotiator;
+use yii\filters\RateLimiter;
 use yii\rest\Controller;
 use yii\web\Response;
 
@@ -29,6 +30,9 @@ class RequestController extends Controller
                     'application/json' => Response::FORMAT_JSON,
                 ],
             ],
+            'rateLimiter' => [
+                'class' => RateLimiter::class,
+            ],
         ];
     }
 
@@ -41,98 +45,127 @@ class RequestController extends Controller
         $model = new RequestUser();
 
         if ($model->load(Yii::$app->request->post(), '') && $model->save()) {
-            return ['message' => 'Request created successfully!'];
+            return $this->success('Request created successfully!');
         }
 
-        return ['message' => 'Request not created!'];
+        return $this->error('Request not created!');
     }
 
     /**
      * @return string[]|array
      * @throws InvalidConfigException
      */
-    public function actionPut()
+    public function actionPut(): array|string
     {
         $params = Yii::$app->request->getBodyParams();
 
-        if (!empty($params)) {
-            if (!isset($params['id'])) {
-                return ['message' => 'Request number not provided!'];
-            }
-
-            $model = RequestSupport::findOne($params['id']);
-
-            if (!$model) {
-                return ['message' => 'Request not found!'];
-            }
-
-            if (!isset($params['comment'])) {
-                return ['message' => 'Changes not saved! Add a comment!'];
-            }
-
-            $model->comment = $params['comment'];
-            $model->status = 'Resolved';
-
-            if ($model->save()) {
-                self::SendEmail($model);
-                return ['message' => 'Changes saved!'];
-            }
+        if (empty($params)) {
+            return $this->error('Changes not saved! No data!');
         }
 
-        return ['message' => 'Changes not saved! No data!'];
+        if (!isset($params['id'])) {
+            return $this->error('Request number not provided!');
+        }
+
+        if (!isset($params['comment'])) {
+            return $this->error('Add a comment!');
+        }
+
+        $model = RequestSupport::findOne($params['id']);
+
+        if (!$model) {
+            return $this->error('Request not found!');
+        }
+
+        $model->comment = $params['comment'];
+        $model->status = 'Resolved';
+
+        if (!$model->save()) {
+            return $this->error('Request not saved!');
+        }
+
+        self::SendEmail($model);
+
+        return $this->success('Changes saved!');
     }
 
     /**
      * @return array|Request
      */
-    public
-    function actionGet(): array|Request
+    public function actionGet(): array|Request
     {
         $params = Yii::$app->request->get();
 
-        if (!empty($params)) {
-            if (isset($params['status']) && !isset($params['created_at'])) {
-                $model = Request::find()
-                    ->where(['status' => $params['status']])
-                    ->all();
-            }
-
-            if (!isset($params['status']) && isset($params['created_at'])) {
-                $model = Request::find()
-                    ->where(['created_at' => $params['created_at']])
-                    ->all();
-            }
-
-            if (isset($params['status']) && isset($params['created_at'])) {
-                $model = Request::find()
-                    ->where(['status' => $params['status']])
-                    ->andWhere(['like', 'created_at', $params['created_at']])
-                    ->all();
-            }
-        } else {
+        if (empty($params)) {
             $model = Request::find()
                 ->orderBy('status')
                 ->all();
         }
 
+        if (isset($params['status']) && !isset($params['created_at'])) {
+            $model = Request::find()
+                ->where(['status' => $params['status']])
+                ->all();
+        }
+
+        if (!isset($params['status']) && isset($params['created_at'])) {
+            $model = Request::find()
+                ->where(['like', 'created_at', $params['created_at']])
+                ->all();
+        }
+
+        if (isset($params['status']) && isset($params['created_at'])) {
+            $model = Request::find()
+                ->where(['status' => $params['status']])
+                ->andWhere(['like', 'created_at', $params['created_at']])
+                ->all();
+        }
+
         if (!$model) {
-            return ['message' => 'Requests not found!'];
+            return $this->error('Requests not found!');
         }
 
         return $model;
     }
 
     /**
-     * @param $model Request
+     * @param Request $model
      * @return void
      */
-    private static function SendEmail(Request $model): void
+    private
+    static function SendEmail(Request $model): void
     {
         Yii::$app->mailer->compose()
             ->setFrom(Yii::$app->params['supportEmail'])
             ->setTo($model->email)
-            ->setSubject('Response to your request № ' . $model->id)
+            ->setSubject('Response to your request #' . $model->id)
             ->setTextBody($model->comment)
             ->send();
+    }
+
+    /**
+     * @param $msg
+     * @return array
+     */
+    public
+    function error($msg): array
+    {
+        return [
+            'result' => false,
+            'message' => $msg,
+        ];
+    }
+
+    /**
+     * @param $msg
+     * @return array
+     */
+    public
+    function success($msg): array
+    {
+        return [
+            'result' => true,
+            'message' => $msg,
+        ];
     }
 }

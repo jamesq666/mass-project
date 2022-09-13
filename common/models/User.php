@@ -3,9 +3,9 @@
 namespace common\models;
 
 use Yii;
-use yii\base\NotSupportedException;
 use yii\behaviors\TimestampBehavior;
 use yii\db\ActiveRecord;
+use yii\filters\RateLimitInterface;
 use yii\web\IdentityInterface;
 
 /**
@@ -22,8 +22,10 @@ use yii\web\IdentityInterface;
  * @property integer $created_at
  * @property integer $updated_at
  * @property string $password write-only password
+ * @property integer $allowance
+ * @property integer $allowance_updated_at
  */
-class User extends ActiveRecord implements IdentityInterface
+class User extends ActiveRecord implements RateLimitInterface, IdentityInterface
 {
     const STATUS_DELETED = 0;
     const STATUS_INACTIVE = 9;
@@ -210,5 +212,39 @@ class User extends ActiveRecord implements IdentityInterface
     public function removePasswordResetToken()
     {
         $this->password_reset_token = null;
+    }
+
+    /**
+     * @param $request
+     * @param $action
+     * @return int[]
+     */
+    public function getRateLimit($request, $action): array
+    {
+        return [100, 60];
+    }
+
+    /**
+     * @param $request
+     * @param $action
+     * @return array
+     */
+    public function loadAllowance($request, $action): array
+    {
+        return [$this->allowance, $this->allowance_updated_at];
+    }
+
+    /**
+     * @param $request
+     * @param $action
+     * @param $allowance
+     * @param $timestamp
+     * @return void
+     */
+    public function saveAllowance($request, $action, $allowance, $timestamp): void
+    {
+        $this->allowance = $allowance;
+        $this->allowance_updated_at = $timestamp;
+        $this->save();
     }
 }
